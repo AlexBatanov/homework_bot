@@ -13,9 +13,9 @@ from consts import (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
 
 
 def get_logger(name: str) -> object:
-    """Настройка логера"""
-    format = (f'%(asctime)s %(levelname)s - '
-              f'%(funcName)s(%(lineno)d) - %(message)s')
+    """Настройка логера."""
+    format = ('%(asctime)s %(levelname)s - '
+              '%(funcName)s(%(lineno)d) - %(message)s')
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(logging.Formatter(format))
     logger = logging.getLogger(name)
@@ -23,31 +23,29 @@ def get_logger(name: str) -> object:
     logger.addHandler(stream_handler)
     return logger
 
+
 logger = get_logger(__name__)
 
 cache_verdict = dict()
 
 
 def check_tokens() -> None:
-    """Проверка наличия токенов, возбуждает исключение"""
-
+    """Проверка наличия токенов, возбуждает исключение."""
     tokens = {
         PRACTICUM_TOKEN: 'PRACTICUM_TOKEN',
         TELEGRAM_TOKEN: 'TELEGRAM_TOKEN',
         TELEGRAM_CHAT_ID: 'TELEGRAM_CHAT_ID'
-        }
+    }
 
     for key, value in tokens.items():
         if not key:
-            logger.critical(
-                f'Отсутствует обязательная переменная окружения: {value}'
-                )
+            logger.critical('Отсутствует обязательная '
+                            f'переменная окружения: {value}')
             raise NotToken(value)
 
 
 def send_message(bot: telegram.Bot, message: str) -> None:
-    """Отправка сообщений в Telegram"""
-
+    """Отправка сообщений в Telegram."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug('удачная отправка сообщения в Telegram')
@@ -60,7 +58,6 @@ def get_api_answer(timestamp: int) -> dict:
     Подключение к API.
     возбуждает исключение если статус ответа != 200
     """
-
     payload = {'from_date': timestamp}
 
     try:
@@ -81,10 +78,9 @@ def get_api_answer(timestamp: int) -> dict:
 
 def check_response(response: dict) -> None:
     """
-    Проверка данных,
+    Проверка данных.
     вызывает исключение ели данные не валидны
     """
-
     if not type(response) is dict:
         logger.error('Данные не верного типа')
         raise TypeError
@@ -100,10 +96,9 @@ def check_response(response: dict) -> None:
 
 def parse_status(homework: dict) -> str:
     """
-    Извлекает статус работы,
+    Извлекает статус работы.
     вызывает исключение если данные не валидны
     """
-
     verdict = homework.get('status')
     homework_name = homework.get('homework_name')
 
@@ -122,15 +117,12 @@ def parse_status(homework: dict) -> str:
         cache_verdict[homework_name] = verdict
         logger.debug(f'Изменился статус проверки работы "{homework_name}"')
 
-        return (
-            f'Изменился статус проверки работы "{homework_name}" ' +
-            HOMEWORK_VERDICTS.get(verdict)
-            )
+        return (f'Изменился статус проверки работы "{homework_name}" '
+                f'{HOMEWORK_VERDICTS.get(verdict)}')
 
 
 def main():
     """Основная логика работы бота."""
-
     try:
         check_tokens()
     except Exception as err:

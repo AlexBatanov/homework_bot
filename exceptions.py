@@ -1,5 +1,5 @@
 class NotToken(Exception):
-    """Отсутствие токена"""
+    """Отсутствие токена."""
     def __init__(self, message):
         self.message = message
 
@@ -8,30 +8,26 @@ class NotToken(Exception):
 
 
 class UnknownStatusHomework(Exception):
-    """Нет нужного статуса работы"""
-
+    """Нет нужного статуса работы."""
     def __str__(self):
         return (f'{self.__class__.__name__}: '
                 'такого статуса не существет в HOMEWORK_VERDICTS')
 
 
 class ResponseStatusInvalid(Exception):
-    """API status code != 200"""
-
+    """API status code != 200."""
     def __str__(self):
         return (f'{self.__class__.__name__}: API status code != 200')
 
 
 class NoStatusHomework(Exception):
-    """Нет статуса домашней работы"""
-
+    """Нет статуса домашней работы."""
     def __str__(self):
         return (f'{self.__class__.__name__}: '
                 'Отсутсвует статус домашней работы')
 
 
 class NoHomework(Exception):
-    """Нет домашних работ"""
-
+    """Нет домашних работ."""
     def __str__(self):
         return (f'{self.__class__.__name__}: Нет домашних работ')
