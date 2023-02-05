@@ -6,7 +6,7 @@ import logging
 import requests
 import telegram
 
-from exceptions import (NoHomework, NoStatusHomework, NotToken,
+from exceptions import (NoStatusHomework, RequestConnectException,
                         ResponseStatusInvalid, UnknownStatusHomework)
 from consts import (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
                     RETRY_PERIOD, ENDPOINT, HEADERS, HOMEWORK_VERDICTS)
@@ -26,10 +26,8 @@ def get_logger(name: str) -> object:
 
 logger = get_logger(__name__)
 
-cache_verdict = dict()
 
-
-def check_tokens() -> None:
+def check_tokens() -> bool:
     """Проверка наличия токенов, возбуждает исключение."""
     tokens = {
         PRACTICUM_TOKEN: 'PRACTICUM_TOKEN',
@@ -41,16 +39,21 @@ def check_tokens() -> None:
         if not key:
             logger.critical('Отсутствует обязательная '
                             f'переменная окружения: {value}')
-            raise NotToken(value)
+            return False
+
+    return True
 
 
-def send_message(bot: telegram.Bot, message: str) -> None:
+def send_message(bot: telegram.Bot, message: str) -> bool:
     """Отправка сообщений в Telegram."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug('удачная отправка сообщения в Telegram')
-    except Exception as error:
+    except telegram.error.TelegramError as error:
         logger.error(f'{error}: сбой при отправке сообщения в Telegram')
+
+        return False
+    return True
 
 
 def get_api_answer(timestamp: int) -> dict:
@@ -62,9 +65,10 @@ def get_api_answer(timestamp: int) -> dict:
 
     try:
         request = requests.get(ENDPOINT, headers=HEADERS, params=payload)
-    except Exception as err:
+    except requests.RequestException as err:
         logger.error(f'{err}: Сбой в работе программы: '
                      f'Эндпоинт {ENDPOINT} недоступен. ')
+        raise RequestConnectException(err)
 
     if request.status_code != HTTPStatus.OK:
         logger.error(
@@ -79,28 +83,36 @@ def get_api_answer(timestamp: int) -> dict:
 def check_response(response: dict) -> None:
     """
     Проверка данных.
-    вызывает исключение ели данные не валидны
+    вызывает исключение если данные не валидны
     """
-    if not type(response) is dict:
+    data = {'homeworks': list, 'current_date': int}
+
+    if not isinstance(response, dict):
         logger.error('Данные не верного типа')
         raise TypeError
 
-    if not type(response.get('homeworks')) is list:
-        logger.error('Данные не верного типа')
-        raise TypeError
+    for k, v in data.items():
+        if k not in response:
+            logger.error(f'Данные не валидны, отсутсвует ключ "{k}"')
+            raise KeyError
 
-    if not response.get('homeworks'):
-        logger.error('Домашние работы отсутсвуют')
-        raise NoHomework
+        if not isinstance(response.get(k), v):
+            logger.error('Данные не верного типа')
+            raise TypeError
 
 
 def parse_status(homework: dict) -> str:
     """
-    Извлекает статус работы.
+    Извлекает статус и название работы.
     вызывает исключение если данные не валидны
     """
     verdict = homework.get('status')
     homework_name = homework.get('homework_name')
+
+    for key in ('status', 'homework_name'):
+        if key not in homework:
+            logger.error(f'Данные не валидны, отсутсвует ключ "{key}"')
+            raise KeyError
 
     if not homework_name:
         logger.error('Отсутсвет статус домашней работы')
@@ -111,42 +123,48 @@ def parse_status(homework: dict) -> str:
                      'обнаруженный в ответе API ')
         raise UnknownStatusHomework
 
-    if cache_verdict.get(homework_name) == verdict:
-        logger.debug('отсутствие в ответе новых статусов')
-    else:
-        cache_verdict[homework_name] = verdict
-        logger.debug(f'Изменился статус проверки работы "{homework_name}"')
-
-        return (f'Изменился статус проверки работы "{homework_name}" '
-                f'{HOMEWORK_VERDICTS.get(verdict)}')
+    return (f'Изменился статус проверки работы "{homework_name}" '
+            f'{HOMEWORK_VERDICTS.get(verdict)}')
 
 
 def main():
     """Основная логика работы бота."""
-    try:
-        check_tokens()
-    except Exception as err:
-        sys.exit(err)
+    if not check_tokens():
+        sys.exit('Проблема с токенами')
 
     logger.debug('Запуск бота')
-
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+
     timestamp = int(time.time())
+    message_no_hw = 'Домашних работ нет, ждем...'
+    message = ''
 
     while True:
         try:
             response = get_api_answer(timestamp)
             check_response(response)
-            homework = response.get('homeworks')[0]
-            message = parse_status(homework)
+            homework = response.get('homeworks')
+
+            if not homework and message != message_no_hw:
+                message = message_no_hw
+                send_message(bot, message)
+            else:
+                message_new = parse_status(homework[0])
+
+            if message != message_new:
+                if send_message(bot, message_new):
+                    message = message_new
+                    timestamp = response.get('current_date')
+
         except Exception as error:
             logger.debug(f'Сбой в работе программы: {error}')
-            message = f'Сбой в работе программы: {error}'
+            message_err = f'Сбой в работе программы: {error}'
 
-        if message:
-            send_message(bot, message)
-
-        time.sleep(RETRY_PERIOD)
+            if message != message_err:
+                if send_message(bot, message_err):
+                    message = message_err
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':

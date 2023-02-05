@@ -27,7 +27,10 @@ class NoStatusHomework(Exception):
                 'Отсутсвует статус домашней работы')
 
 
-class NoHomework(Exception):
-    """Нет домашних работ."""
+class RequestConnectException(Exception):
+    """Ошибка при подключении к API."""
+    def __init__(self, message):
+        self.message = message
+
     def __str__(self):
-        return (f'{self.__class__.__name__}: Нет домашних работ')
+        return f'{self.__class__.__name__}: ошибка подключения {self.message}'
